@@ -446,3 +446,4 @@ quit_button = tk.Button(top, text="Quit",command=quit)
 quit_button.grid(row=3, column= 8)
 
 
+run()
