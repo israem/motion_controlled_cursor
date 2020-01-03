@@ -1,5 +1,4 @@
-from ctypes.wintypes import POINT
-
+from pynput.mouse import Button, Controller
 import numpy as np
 import cv2, ctypes
 import time
@@ -10,6 +9,8 @@ import os
 
 DEBUG = False
 cap = cv2.VideoCapture(0)
+mouse = Controller()
+
 control_parameters = {}
 video_parameters = {}
 filter_parameters = {}
@@ -192,40 +193,29 @@ def centroid(max_contour):
         return None
 
 def control_by_method(positions, SquareSpeed=False, mb_right = False, mb_left=False, DispOnly=False, mb_left_double_click=False):
-    point = POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+    point = mouse.position
     if SquareSpeed:
-        ctypes.windll.user32.SetCursorPos(
-            int(positions['disp'][0] * positions['motion_speed'][0] * control_parameters['control_speed']) + point.x,
-            int(positions['disp'][1] * positions['motion_speed'][1] * control_parameters['control_speed']) + point.y
+        mouse.move(
+            int(positions['disp'][0] * positions['motion_speed'][0] * control_parameters['control_speed']),
+            int(positions['disp'][1] * positions['motion_speed'][1] * control_parameters['control_speed'])
         )
     if DispOnly:
-        ctypes.windll.user32.SetCursorPos(
-            int(positions['disp'][0]) + point.x,
-            int(positions['disp'][1]) + point.y
+        mouse.move(
+            int(positions['disp'][0]),
+            int(positions['disp'][1])
         )
     if mb_left:
         if time.time() - control_parameters['pressed'] > 0.5:
             control_parameters['pressed'] = time.time()
-            ctypes.windll.user32.mouse_event(0x2, 0, 0, 0, 0)
-            time.sleep(0.001)
-            ctypes.windll.user32.mouse_event(0x4, 0, 0, 0, 0)
+            mouse.click(Button.left,1)
     if mb_left_double_click:
         if time.time() - control_parameters['pressed'] > 0.5:
             control_parameters['pressed'] = time.time()
-            ctypes.windll.user32.mouse_event(0x2, 0, 0, 0, 0)
-            time.sleep(0.001)
-            ctypes.windll.user32.mouse_event(0x4, 0, 0, 0, 0)
-            time.sleep(0.001)
-            ctypes.windll.user32.mouse_event(0x2, 0, 0, 0, 0)
-            time.sleep(0.001)
-            ctypes.windll.user32.mouse_event(0x4, 0, 0, 0, 0)
+            mouse.click(Button.left,2)
     if mb_right:
         if time.time() - control_parameters['pressed'] > 0.5:
             control_parameters['pressed'] = time.time()
-            ctypes.windll.user32.mouse_event(0x2, 0, 0, 0, 0)
-            time.sleep(0.001)
-            ctypes.windll.user32.mouse_event(0x4, 0, 0, 0, 0)
+            mouse.click(Button.right, 2)
 
 def run(cap = cap):
     image_dimensions = [0, 480, 0, 640]
