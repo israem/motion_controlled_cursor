@@ -354,10 +354,11 @@ def run(cap = cap):
                 if positions['hull_matching_index'] < filter_parameters['shape_matching_threshhold']:
                     control_by_method(positions, SquareSpeed=True)
         frame_conts = cv2.drawContours(frame.copy(), contours_sub_Frame, -1, (0, 255, 0), 1)
-        frame_conts = cv2.drawContours(frame_conts, [hull], -1, (255, 0, 0), 1)
-        frame_conts = cv2.drawMarker(frame_conts, centeroid_pt,(255,255,255),cv2.MARKER_CROSS, thickness=2 )
-        frame_conts = cv2.drawMarker(frame_conts, tuple(segment_stationary['top']), (255, 255, 255), cv2.MARKER_CROSS, thickness=2)
-        frame_conts = cv2.drawMarker(frame_conts, positions['top_mean'], (0,0,0), cv2.MARKER_CROSS, thickness=2)
+        if hull is not None:
+            frame_conts = cv2.drawContours(frame_conts, [hull], -1, (255, 0, 0), 1)
+            frame_conts = cv2.drawMarker(frame_conts, centeroid_pt,(255,255,255),cv2.MARKER_CROSS, thickness=2 )
+            frame_conts = cv2.drawMarker(frame_conts, tuple(segment_stationary['top']), (255, 255, 255), cv2.MARKER_CROSS, thickness=2)
+            frame_conts = cv2.drawMarker(frame_conts, positions['top_mean'], (0,0,0), cv2.MARKER_CROSS, thickness=2)
         draw_motion_frame(frame_conts, image_dimensions)
 
 
