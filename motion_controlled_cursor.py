@@ -446,5 +446,5 @@ control_checkbox.grid(row=2, column=8)
 quit_button = tk.Button(top, text="Quit",command=quit)
 quit_button.grid(row=3, column= 8)
 
-
+get_color_signature()
 run()
