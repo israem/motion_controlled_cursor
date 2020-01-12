@@ -57,26 +57,36 @@ def quit():
     control_parameters['run'] = False
 
 
+
 def get_color_signature():
     global hist
-    images = []
     key = cv2.waitKey(100)
-    while key != ord('r') and key != ord('a'):
+    while key != ord('q') and key != ord('d'):
         frame_hist = cap.read()[1]
         frame_hist = cv2.flip(frame_hist, 1)
         cv2.rectangle(frame_hist, (377, 307), (423, 373), color=(255, 255, 255), thickness=2)
-        show_images([frame_hist], ['color_signature'])
-        key = cv2.waitKey(100)
-        if key == ord('r') or key == ord('a'):
-            frame_hist = cap.read()[1]
-            frame_hist = cv2.flip(frame_hist, 1)
-            working_frame = frame_hist[310:370, 380:420]
-            imageHSV = cv2.cvtColor(working_frame, cv2.COLOR_BGR2HSV)
-            images.append(imageHSV)
-    if key == ord('r'):
-        hist = cv2.calcHist(images, [0, 1], None, [256, 256], ( 0, 256, 0, 256))
-    else:
-        hist = cv2.calcHist(images, [0, 1], None, [256, 256], ( 0, 256, 0, 256), hist)
+        working_frame = frame_hist[310:370, 380:420]
+        imageHSV = cv2.cvtColor(working_frame, cv2.COLOR_BGR2HSV)
+        hist_temp = cv2.calcHist([imageHSV], [0, 1], None, [256, 256], (0, 256, 0, 256))
+        frame_hist[80:336,0:256] = cv2.cvtColor(hist_temp,cv2.COLOR_GRAY2BGR) * 255
+        frame_hist[0:80, :] = (255,255,255)
+        frame_hist = cv2.putText(frame_hist, "Place hand in the white box. Then", (0, 10), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
+        frame_hist = cv2.putText(frame_hist, "press 'r' to record current picture, ", (0, 20), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
+        frame_hist = cv2.putText(frame_hist, "press 'q' to quit or" , (0, 30), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
+        frame_hist = cv2.putText(frame_hist, "press 'd' to clear histogram, history and record latest picture. ", (0, 40), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
+        frame_hist = cv2.putText(frame_hist, 'Histogram (Hue, saturation)', (0, 70), cv2.FONT_HERSHEY_PLAIN,
+                                 fontScale=1, thickness=2, color=(0, 0, 0))
+        cv2.imshow('color_signature', frame_hist)
+        key = cv2.waitKey(20)
+        if key == ord('r'):
+            if hist is not None:
+                hist = hist + hist_temp
+            else:
+                hist = hist_temp
+        if key == ord('d'):
+            hist = cv2.calcHist([imageHSV], [0, 1], None, [256, 256], (0, 256, 0, 256))
+    cv2.imshow('color_signature', hist)
+    cv2.waitKey(7000)
     cv2.destroyWindow('color_signature')
 
 
