@@ -305,15 +305,16 @@ def run(cap = cap):
             merged_contours = []
             for i, con in enumerate(contours_sub_Frame):
                 merged_contours.extend(con)
-            if hull is not None:
-                temp_hull = hull.copy()
-                hull = cv2.convexHull(np.array(merged_contours))
-                positions['hull_matching_index'] = cv2.matchShapes(hull, temp_hull, cv2.CONTOURS_MATCH_I3, 0.0)
-                if positions['hull_matching_index'] < filter_parameters['shape_matching_threshhold'] or key == 'w':
-                    positions['prev_hull'] = temp_hull.copy()
-                    positions['hull_matching_index'] = cv2.matchShapes(hull, positions['prev_hull'],cv2.CONTOURS_MATCH_I3, 0.0)
-            else:
-                hull = cv2.convexHull(np.array(merged_contours))
+                if hull is not None:
+                    temp_hull = hull.copy()
+                    hull = cv2.convexHull(np.array(con))
+                    positions['hull_matching_index'] = cv2.matchShapes(hull, temp_hull, cv2.CONTOURS_MATCH_I3, 0.0)
+                    if positions['hull_matching_index'] < filter_parameters['shape_matching_threshhold'] or key == 'w':
+                        positions['prev_hull'] = temp_hull.copy()
+                        positions['hull_matching_index'] = cv2.matchShapes(hull, positions['prev_hull'],cv2.CONTOURS_MATCH_I3, 0.0)
+                else:
+                    hull = cv2.convexHull(np.array(merged_contours))
+                    temp_hull = hull.copy()
 
             # calculate centroid
             centeroid_pt = centroid(hull)
@@ -424,13 +425,13 @@ scales['min_contour_length'].config(to= 25,     command = lambda x : set_paramet
 scales['control_speed'].config(                         command = lambda x : set_parameter(int(x),'control_speed',control_parameters,fraction=1000))
 
 scales['kernel_size_full_frame'].set(3)
-scales['kernel_size_focus_frame'].set(3)
+scales['kernel_size_focus_frame'].set(1)
 scales['wait_time'].set(1)
 scales['threshhold_full_frame'].set(2)
 scales['threshhold_focus_frame'].set(7)
 scales['focus_frame_margin'].set(9)
 scales['line_stream_length'].set(2)
-scales['min_contour_length'].set(9)
+scales['min_contour_length'].set(10)
 scales['control_speed'].set(6)
 
 
