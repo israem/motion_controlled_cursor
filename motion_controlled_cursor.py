@@ -92,43 +92,24 @@ def set_parameter(value, key, parameters, fraction=1.0, offset = 0):
 
 def quit():
     control_parameters['run'] = False
-<<<<<<< HEAD
-    
-    
+
+
 def get_color_signature():
     global hist
     key = cv2.waitKey(100)
     while key != ord('q'):
-=======
-
-
-
-def get_color_signature():
-    global hist
-    key = cv2.waitKey(100)
-    while key != ord('q') and key != ord('d'):
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
         frame_hist = cap.read()[1]
         frame_hist = cv2.flip(frame_hist, 1)
         cv2.rectangle(frame_hist, (377, 307), (423, 373), color=(255, 255, 255), thickness=2)
         working_frame = frame_hist[310:370, 380:420]
-<<<<<<< HEAD
         image_hsv = cv2.cvtColor(working_frame, cv2.COLOR_BGR2HSV)
         hist_temp = cv2.calcHist([image_hsv], [0, 1], None, [256, 256], (0, 256, 0, 256))
-=======
-        imageHSV = cv2.cvtColor(working_frame, cv2.COLOR_BGR2HSV)
-        hist_temp = cv2.calcHist([imageHSV], [0, 1], None, [256, 256], (0, 256, 0, 256))
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
         frame_hist[80:336,0:256] = cv2.cvtColor(hist_temp,cv2.COLOR_GRAY2BGR) * 255
         frame_hist[0:80, :] = (255,255,255)
         frame_hist = cv2.putText(frame_hist, "Place hand in the white box. Then", (0, 10), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
         frame_hist = cv2.putText(frame_hist, "press 'r' to record current picture, ", (0, 20), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
         frame_hist = cv2.putText(frame_hist, "press 'q' to quit or" , (0, 30), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
-<<<<<<< HEAD
         frame_hist = cv2.putText(frame_hist, "press 'd' to clear the histogram's history.", (0, 40), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
-=======
-        frame_hist = cv2.putText(frame_hist, "press 'd' to clear histogram, history and record latest picture. ", (0, 40), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
         frame_hist = cv2.putText(frame_hist, 'Histogram (Hue, saturation)', (0, 70), cv2.FONT_HERSHEY_PLAIN,
                                  fontScale=1, thickness=2, color=(0, 0, 0))
         cv2.imshow('color_signature', frame_hist)
@@ -136,20 +117,11 @@ def get_color_signature():
         if key == ord('r'):
             if hist is not None:
                 hist = hist + hist_temp
-<<<<<<< HEAD
                 cv2.imshow('color_signature_hist', hist)
             else:
                 hist = hist_temp
         if key == ord('c'):
             hist = None
-=======
-            else:
-                hist = hist_temp
-        if key == ord('d'):
-            hist = cv2.calcHist([imageHSV], [0, 1], None, [256, 256], (0, 256, 0, 256))
-    cv2.imshow('color_signature', hist)
-    cv2.waitKey(7000)
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
     cv2.destroyWindow('color_signature')
     cv2.destroyWindow('color_signature_hist')
 
@@ -367,7 +339,6 @@ def run(cap = cap):
 
         if len(contours_sub_Frame) > 0:
             # find centroid from the top contour
-<<<<<<< HEAD
             if hull is None:
                 merged_contours = []
                 [merged_contours.extend(con) for con in contours_sub_Frame]
@@ -418,87 +389,18 @@ def run(cap = cap):
                         positions['hull_matching_index'] = filter_parameters['shape_matching_threshold']
 
             print(positions.get('hull_matching_index'))
-=======
-
-            merged_contours = []
-            for i, con in enumerate(contours_sub_Frame):
-                merged_contours.extend(con)
-                if hull is not None:
-                    temp_hull = hull.copy()
-                    hull = cv2.convexHull(np.array(con))
-                    positions['hull_matching_index'] = cv2.matchShapes(hull, temp_hull, cv2.CONTOURS_MATCH_I3, 0.0)
-                    if positions['hull_matching_index'] < filter_parameters['shape_matching_threshhold'] or key == 'w':
-                        positions['prev_hull'] = temp_hull.copy()
-                        positions['hull_matching_index'] = cv2.matchShapes(hull, positions['prev_hull'],cv2.CONTOURS_MATCH_I3, 0.0)
-                else:
-                    hull = cv2.convexHull(np.array(merged_contours))
-                    temp_hull = hull.copy()
-
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
             # calculate centroid
             centeroid_pt = centroid(hull)
             line_stream.append(centeroid_pt)
             calc_segments([hull], segment_stationary)
             # calculate the new sub frame
             ratio, area_temp, temp_dims = calc_motion_frame_dimensions(segment_moving, segment_stationary)
-<<<<<<< HEAD
         elif len(contours) > 0 and gesture_control.get('top'):
             ratio, area_temp, temp_dims = calc_motion_frame_dimensions(segment_moving, segment_moving)
         else:
             ratio, area_temp, temp_dims = 1, filter_parameters['min_area'] + 1,[120, 360, 160, 480]
         if area_temp > filter_parameters['min_area']:
             image_dimensions = temp_dims
-=======
-            if area_temp > filter_parameters['min_area']:
-                image_dimensions = temp_dims
-
-            if control_parameters['save_current_image']:
-
-                save_image(thresh)
-                control_parameters['save_current_image'] = False
-
-            # This position values are used to adjust the mouse cursor coordinates.
-            # Every iteration the mouse will move 'disp' (for displacement) pixels multiplied by the speed
-            positions['proc_time'] = time.time() - positions['proc_time'] + 0.001*video_parameters['wait_time']
-            positions['prev_top_mean'] = positions['top_mean']
-            positions['top_mean'] = tuple(np.mean(np.array(line_stream), axis=0).astype(int))
-            positions['disp'] = np.array(positions['top_mean']) - np.array(positions['prev_top_mean'])
-            positions['motion_speed'] = np.abs(positions['disp'] / positions['proc_time'])
-
-            # Gesture control, the queues acting as filters to measure the mean distances over time.
-            # So we can dinamically detect whether a significat motion was done if the current is much larger then the mean
-            # since every new value continuously fed into the filter the mean value will adjust itself,
-            # essentialy allowing the gesture to be performed only once over time.
-            thumb_mean_stream.append((np.array(centeroid_pt) - segment_stationary['left'])[0])
-            positions['thumb_mean'] = np.sum(np.array(thumb_mean_stream)) // filter_parameters['gesture_detection_filter_size']
-            pinki_mean_stream.append((segment_stationary['right'] - np.array(centeroid_pt))[0])
-            positions['pinki_mean'] = np.sum(np.array(pinki_mean_stream)) // filter_parameters['gesture_detection_filter_size']
-            top_f_mean_stream.append((np.array(centeroid_pt) - segment_stationary['top'])[1])
-            positions['top_f_mean'] = np.sum(np.array(top_f_mean_stream)) // filter_parameters['gesture_detection_filter_size']
-
-            if control_parameters['control']:
-                if (np.array(centeroid_pt) - segment_stationary['left'])[0] > 1.8*positions['thumb_mean']:
-                    gesture_control['thumb'] = True
-                if (segment_stationary['right'] - np.array(centeroid_pt))[0] > 1.8 * positions['pinki_mean']:
-                    gesture_control['pinki'] = True
-                if (np.array(centeroid_pt) - segment_stationary['top'])[1] < 0.6 * positions['top_f_mean']:
-                    gesture_control['top'] = True
-
-                if gesture_control['thumb'] and gesture_control['pinki'] and gesture_control['top'] and len(contours) > 0:
-                    control_by_method(positions, mb_left=True)
-                    gesture_control['thumb'] = False
-                    gesture_control['top'] = False
-                    gesture_control['pinki'] = False
-                if positions['hull_matching_index'] < filter_parameters['shape_matching_threshhold']:
-                    control_by_method(positions, SquareSpeed=True)
-        frame_conts = cv2.drawContours(frame.copy(), contours_sub_Frame, -1, (0, 255, 0), 1)
-        if hull is not None:
-            frame_conts = cv2.drawContours(frame_conts, [hull], -1, (255, 0, 0), 1)
-            frame_conts = cv2.drawMarker(frame_conts, centeroid_pt,(255,255,255),cv2.MARKER_CROSS, thickness=2 )
-            frame_conts = cv2.drawMarker(frame_conts, tuple(segment_stationary['top']), (255, 255, 255), cv2.MARKER_CROSS, thickness=2)
-            frame_conts = cv2.drawMarker(frame_conts, positions['top_mean'], (0,0,0), cv2.MARKER_CROSS, thickness=2)
-        draw_motion_frame(frame_conts, image_dimensions)
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
 
         if control_parameters['save_current_image']:
             save_image(sub_frame, name='sub_frame')
@@ -620,13 +522,8 @@ scales['wait_time'].set(1)
 scales['threshold_full_frame'].set(2)
 scales['threshold_focus_frame'].set(7)
 scales['focus_frame_margin'].set(9)
-<<<<<<< HEAD
 scales['shape_matching_threshold'].set(6)
 scales['min_contour_length'].set(6)
-=======
-scales['line_stream_length'].set(2)
-scales['min_contour_length'].set(10)
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
 scales['control_speed'].set(6)
 
 #tutorial_button = tk.Button(top, text="Tutorial",command=tutorial)
@@ -640,7 +537,4 @@ quit_button.grid(row=4, column= 8)
 
 get_color_signature()
 run()
-<<<<<<< HEAD
 
-=======
->>>>>>> 4a629162ad1f9c64d033ac45236b6b32874aeb5c
