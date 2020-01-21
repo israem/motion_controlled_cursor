@@ -11,10 +11,11 @@ from matplotlib import pyplot as plt
 from mpl_toolkits import mplot3d
 
 DEBUG = False
+print('Connecting to camera..')
 cap = cv2.VideoCapture(0)
 out = cv2.VideoWriter('.\\video.mp4',cv2.VideoWriter_fourcc(*'XVID'), 25, (640,480))
 mouse = Controller()
-
+print('Done!')
 control_parameters = {}
 video_parameters = {}
 filter_parameters = {}
@@ -388,7 +389,6 @@ def run(cap = cap):
                         hull = cv2.convexHull(np.array(merged_contours))
                         positions['hull_matching_index'] = filter_parameters['shape_matching_threshold']
 
-            print(positions.get('hull_matching_index'))
             # calculate centroid
             centeroid_pt = centroid(hull)
             line_stream.append(centeroid_pt)
