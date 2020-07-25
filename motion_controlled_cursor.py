@@ -24,6 +24,7 @@ top = tk.Tk()
 
 
 hist = None
+hull = None
 
 def tutorial():
     tutorials_pages = []
@@ -56,6 +57,60 @@ def tutorial():
     first_frame = cv2.putText(first_frame, 'Something', org=(40, 60), color=(0, 0, 0), fontScale=1,fontFace=cv2.FONT_HERSHEY_PLAIN)
     display_frame(first_frame)
     tutorial_window.update()
+
+
+class CentroidFilter:
+    def __init__(self, name, defualt_value=0, filter_length=30, match_factor = 30, change_threshold = 20, defaults_to = True):
+        self.stream_out = deque(np.array([defualt_value] * filter_length))
+        self.stream_in = deque(np.array([defualt_value] * filter_length))
+        self.filter_length = filter_length
+        self.mean_out = 0
+        self.mean_in = 0
+        self.gesture_name = name
+        self.gesture_in = False
+        self.gesture_out = False
+        self.match_factor = match_factor
+        self.change_threshold = change_threshold
+        self.defaults_to = defaults_to
+
+    def __repr__(self):
+        return self.gesture_name + ": " + str(self.gesture_out) + " - " + str(int(self.mean_in)) + " - " + str(int(self.mean_out)) + " - " + str(self.last_diff)
+
+    def __str__(self):
+        return self.gesture_name + ": " + str(self.gesture_out) + " - " + str(int(self.mean_in)) + " - " + str(int(self.mean_out)) + " - " + str(self.last_diff)
+
+    def update_means(self):
+        self.mean_out = np.mean(np.array(self.stream_out))
+        self.mean_in = np.mean(np.array(self.stream_in))
+
+    def add(self, value_low, value_high):
+        self.last_diff = np.abs(value_high - value_low)
+        self.stream_in.append(self.last_diff)
+        self.stream_out.append(self.last_diff)
+        self.update_means()
+        self.test(value_high, value_low)
+
+    def release_points(self):
+        while len(self.stream_in) >= self.filter_length:
+            self.stream_in.popleft()
+        while len(self.stream_out) >= self.filter_length:
+            self.stream_out.popleft()
+
+    def test(self, point1, point2):
+        diff = self.last_diff
+        if diff > (self.mean_in + self.mean_out) / 2:
+            self.stream_in[-1] = self.mean_out - self.match_factor
+            self.update_means()
+        else:
+            self.stream_out[-1] = self.mean_in + self.match_factor
+            self.update_means()
+        if np.abs(diff - self.mean_in) <= self.change_threshold:
+            self.gesture_out = not self.defaults_to
+            self.gesture_in = not self.gesture_out
+        if np.abs(diff - self.mean_out) <= self.change_threshold:
+            self.gesture_out = self.defaults_to
+            self.gesture_in = not self.gesture_out
+
 
 
 def alloc_camera():
@@ -96,21 +151,27 @@ def quit():
 
 
 def get_color_signature():
-    global hist
+    global hist, hull
     key = cv2.waitKey(100)
     while key != ord('q'):
         frame_hist = cap.read()[1]
         frame_hist = cv2.flip(frame_hist, 1)
-        cv2.rectangle(frame_hist, (377, 307), (423, 373), color=(255, 255, 255), thickness=2)
         working_frame = frame_hist[310:370, 380:420]
         image_hsv = cv2.cvtColor(working_frame, cv2.COLOR_BGR2HSV)
         hist_temp = cv2.calcHist([image_hsv], [0, 1], None, [256, 256], (0, 256, 0, 256))
+        if hist is not None:
+            contours, *_ = calc_motion_frame_contours(frame_hist, [237,393,327,443])
+            if len(contours) > 0:
+                hull = cv2.convexHull(contours[0])
+                cv2.drawContours(frame_hist, [hull], -1, (255, 0, 0), 1)
         frame_hist[80:336,0:256] = cv2.cvtColor(hist_temp,cv2.COLOR_GRAY2BGR) * 255
         frame_hist[0:80, :] = (255,255,255)
+        cv2.rectangle(frame_hist, (377, 307), (423, 373), color=(255, 255, 255), thickness=2)
+        cv2.rectangle(frame_hist, (327, 237), (443, 393), color=(0, 0, 0), thickness=1)
         frame_hist = cv2.putText(frame_hist, "Place hand in the white box. Then", (0, 10), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
         frame_hist = cv2.putText(frame_hist, "press 'r' to record current picture, ", (0, 20), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
         frame_hist = cv2.putText(frame_hist, "press 'q' to quit or" , (0, 30), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
-        frame_hist = cv2.putText(frame_hist, "press 'd' to clear the histogram's history.", (0, 40), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
+        frame_hist = cv2.putText(frame_hist, "press 'c' to clear the histogram's history.", (0, 40), cv2.FONT_HERSHEY_PLAIN,fontScale=1, thickness=1, color=(0, 0, 0))
         frame_hist = cv2.putText(frame_hist, 'Histogram (Hue, saturation)', (0, 70), cv2.FONT_HERSHEY_PLAIN,
                                  fontScale=1, thickness=2, color=(0, 0, 0))
         cv2.imshow('color_signature', frame_hist)
@@ -174,13 +235,15 @@ def calc_motion_frame_contours(frame, image_dimensions):
         skinRegionHSV = cv2.inRange(image_hsv, min_HSV, max_HSV)
     else:
         skinRegionHSV = cv2.calcBackProject([image_hsv], [0, 1], hist, (0, 256, 0, 256), 255)
+        hist_temp = cv2.calcHist([image_hsv], [0, 1], None, [256, 256], (0, 256, 0, 256))
     kernel = np.ones((video_parameters['kernel_size_focus_frame'], video_parameters['kernel_size_focus_frame']), np.uint8)
     frame_dilated = cv2.dilate(skinRegionHSV, kernel, iterations=1)
     ret, thresh = cv2.threshold(frame_dilated, video_parameters['threshold_focus_frame'], 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE, offset=(image_dimensions[2], image_dimensions[0]))
     # filters the countours. only consider contours with more points than parameters['min_contour_length']
+    hist_matching_score = np.sum(np.abs(hist - hist_temp))
     contours = [con for con in contours if len(con) > filter_parameters['min_contour_length']]
-    return contours, working_frame, frame_dilated
+    return contours, hist_matching_score, working_frame, frame_dilated
 
 
 def calc_segments(contours,positions):
@@ -201,9 +264,9 @@ def calc_segments(contours,positions):
 def calc_motion_frame_dimensions(segment_moving,segment_stationary):
     temp_image_dimensions = [-video_parameters['focus_frame_margin'], video_parameters['focus_frame_margin'], -video_parameters['focus_frame_margin'], video_parameters['focus_frame_margin']]
     left_points = np.array([segment_moving['left'][0]] + 4*[segment_stationary['left'][0]])
-    right_points = np.array([segment_stationary['right'][0]] + 4*[segment_stationary['right'][0]])
+    right_points = np.array([segment_moving['right'][0]] + 4*[segment_stationary['right'][0]])
     up_points = np.array([segment_moving['top'][1]] + 4*[segment_stationary['top'][1]])
-    down_points = np.array([segment_stationary['down'][1]] + 4*[segment_stationary['down'][1]])
+    down_points = np.array([segment_moving['down'][1]] + 4*[segment_stationary['down'][1]])
     temp_image_dimensions[0] += np.mean(up_points).astype(int)
     temp_image_dimensions[1] += np.mean(down_points).astype(int)
     temp_image_dimensions[2] += np.mean(left_points).astype(int)
@@ -256,34 +319,22 @@ def control_by_method(positions, SquareSpeed=False, mb_right = False, mb_left=Fa
             control_parameters['pressed'] = time.time()
             mouse.click(Button.right, 1)
 
+
+thumb_gesture_controller = CentroidFilter('thumb',match_factor=5, change_threshold = 30, defaults_to=False, filter_length=5)
+pinki_gesture_controller = CentroidFilter('pinki',match_factor=5, change_threshold = 30, defaults_to=False, filter_length=5)
+top_gesture_controller = CentroidFilter('palm', change_threshold=20, match_factor=40)
 def run(cap = cap):
     control_parameters['run'] = True
     image_dimensions = [0, 480, 0, 640]
     area_temp = 640*480//2
     centeroid_pt = (0,0)
     stream = deque()
-    hull = None
     temp_hull = None
-    line_stream = deque(np.array([(0,0),(0,0),(0,0),(0,0)]))
-    thumb_mean_stream = deque(np.array([0] * filter_parameters['gesture_detection_filter_size']))
-    pinki_mean_stream = deque(np.array([0] * filter_parameters['gesture_detection_filter_size']))
-    top_f_mean_stream = deque(np.array([0] * filter_parameters['gesture_detection_filter_size']))
-    top_fist_mean_stream = deque(np.array([0] * filter_parameters['gesture_detection_filter_size']))
-    positions = {
-        'disp' : np.array([0, 0]),
-        'proc_time' : 0,
-        'top_mean' : (0,0),
-        'hull_matching_index':0.05
-    }
-    segment_moving = {
-        'top':np.array([0, 240])
-    }
-    segment_stationary = {
-        'top': np.array([0, 0]),
-        'left': np.array([0, 0]),
-        'right': np.array([640, 0]),
-        'down': np.array([0, 480])
-    }
+    line_stream = deque(np.array([(0, 0), (0, 0), (0, 0), (0, 0)]))
+    shape_matching_index_stream = deque(np.array([0.05] * filter_parameters['gesture_detection_filter_size']))
+    positions = {}
+    segment_moving = {}
+    segment_stationary = {}
 
     [ok, frame] = cap.read()
     stream.append(frame.copy())
@@ -298,17 +349,12 @@ def run(cap = cap):
             control_parameters['record_video'] = True
         elif key == ord('x'):
             control_parameters['record_video'] = False
+
         # clear queues
         while len(stream) >= 2:
             stream.popleft()
-        while len(thumb_mean_stream) >= filter_parameters['gesture_detection_filter_size']:
-            thumb_mean_stream.popleft()
-        while len(pinki_mean_stream) >= filter_parameters['gesture_detection_filter_size']:
-            pinki_mean_stream.popleft()
-        while len(top_f_mean_stream) >= filter_parameters['gesture_detection_filter_size']:
-            top_f_mean_stream.popleft()
-        while len(top_fist_mean_stream) >= filter_parameters['gesture_detection_filter_size']:
-            top_fist_mean_stream.popleft()
+        while len(shape_matching_index_stream) >= filter_parameters['gesture_detection_filter_size']:
+            shape_matching_index_stream.popleft()
         while len(line_stream) >= filter_parameters['line_stream_length']:
             line_stream.popleft()
 
@@ -320,6 +366,12 @@ def run(cap = cap):
 
         # calculate countours and segments - motion
         contours, frame_xor, frame_eroded, frame_morphred, thresh = calc_motion_contours(stream.copy())
+        if len(contours) > 0:
+            merged_contours_motion = []
+            for i, con in enumerate(contours):
+                merged_contours_motion.extend(con)
+            hull_full_frame = cv2.convexHull(np.array(merged_contours_motion))
+            calc_segments([hull_full_frame], segment_moving)
         if control_parameters['save_current_image']:
             save_image(stream[-2], name='stream0')
             save_image(stream[-1], name='stream1')
@@ -328,30 +380,15 @@ def run(cap = cap):
             save_image(frame_morphred, name='frame_morphed')
             save_image(thresh, name='frame_thresh')
 
-        if len(contours) > 0:
-            merged_contours_motion = []
-            for i, con in enumerate(contours):
-                merged_contours_motion.extend(con)
-            hull_full_frame = cv2.convexHull(np.array(merged_contours_motion))
-            calc_segments([hull_full_frame], segment_moving)
-
         # calculate countours and segments - sub frame
-        contours_sub_Frame, sub_frame, thresh = calc_motion_frame_contours(frame.copy(), image_dimensions)
-
+        contours_sub_Frame, hist_matching_score , sub_frame, thresh = calc_motion_frame_contours(frame.copy(), image_dimensions)
         if len(contours_sub_Frame) > 0:
             # find centroid from the top contour
-            if hull is None:
-                merged_contours = []
-                [merged_contours.extend(con) for con in contours_sub_Frame]
-                hull = cv2.convexHull(np.array(merged_contours))
-                temp_hull = hull.copy()
-            else:
+            if hull is not None:
                 matching_indicies = []
                 hulls = []
-                positions['hull_matching_index'] = 0.05
-                j = 0.0
-                while j < positions['hull_matching_index'] <= filter_parameters['shape_matching_threshold']:
-                    j += 0.05
+                positions['hull_matching_index'] = np.mean(np.array(shape_matching_index_stream))
+                while len(hulls) == 0 and positions['hull_matching_index'] <= filter_parameters['shape_matching_threshold']:
                     for con in contours_sub_Frame:
                         temp_hull = cv2.convexHull(np.array(con))
                         temp_matching_score = cv2.matchShapes(temp_hull, hull, cv2.CONTOURS_MATCH_I3, 0.0)
@@ -360,47 +397,70 @@ def run(cap = cap):
                             matching_indicies.append(temp_matching_score)
                     if len(hulls) == 0:
                         positions['hull_matching_index'] += 0.05
-                if len(matching_indicies) > 0:
+                if len(hulls) > 0:
                     hull = hulls[np.argmin(np.array(matching_indicies))]
                     positions['hull_matching_index'] = np.min(np.array(matching_indicies))
+                    shape_matching_index_stream.append(np.min(np.array(matching_indicies)))
                 else:
+                    def calc_hull_and_shape(contours,prev_hull):
+                        if len(contours) > 1:
+                            merged_contours = []
+                            [merged_contours.extend(con) for con in contours]
+                        hull = cv2.convexHull(np.array(merged_contours))
+                        if prev_hull is not None:
+                            matching_score = cv2.matchShapes(prev_hull, hull, cv2.CONTOURS_MATCH_I3, 0.0)
+                            return  hull, matching_score
+
                     e, k = 0, len(contours_sub_Frame)
-                    positions['hull_matching_index'] = 0.05
-                    temp_hulls = [np.array([]),np.array([]),np.array([])]
-                    temp_matching_score = np.array([0.0,0.0,0.0])
-                    while e <= len(contours_sub_Frame)//2 and k >= len(contours_sub_Frame)//2+1 and np.min(temp_matching_score) > positions['hull_matching_index']:
-                        temp_hulls[0] = cv2.convexHull(np.array(contours_sub_Frame[e:k]))
-                        temp_matching_score[0] = cv2.matchShapes(temp_hulls[0], hull, cv2.CONTOURS_MATCH_I3, 0.0)
+                    positions['hull_matching_index'] = np.mean(np.array(shape_matching_index_stream))
+                    temp_hulls = [np.array([]), np.array([]), np.array([])]
+                    temp_matching_score = np.array([2.0, 2.0, 2.0])
+                    while e < k - 1 and np.min(temp_matching_score) > positions['hull_matching_index']:
+                        temp_hulls[0], temp_matching_score[0] = calc_hull_and_shape(contours_sub_Frame[e:k], hull)
                         if temp_matching_score[0] > positions['hull_matching_index']:
-                            temp_hulls[1] = cv2.convexHull(np.array(contours_sub_Frame[e+1:k]))
-                            temp_matching_score[1] = cv2.matchShapes(temp_hulls[1], hull, cv2.CONTOURS_MATCH_I3, 0.0)
-                            temp_hulls[2] = cv2.convexHull(np.array(contours_sub_Frame[e:k-1]))
-                            temp_matching_score[2] = cv2.matchShapes(temp_hulls[2], hull, cv2.CONTOURS_MATCH_I3, 0.0)
+                            temp_hulls[1], temp_matching_score[1] = calc_hull_and_shape(contours_sub_Frame[e + 1:k], hull)
+                            temp_hulls[1], temp_matching_score[1] = calc_hull_and_shape(contours_sub_Frame[e:k - 1], hull)
                             if temp_matching_score[1] > temp_matching_score[2]:
                                 k -= 1
                             else:
                                 e += 1
-                        else:
-                            hull = temp_hulls[(np.argmin(temp_matching_score))]
-                            positions['hull_matching_index'] = np.min(temp_matching_score)
-                    if np.min(temp_matching_score) > positions['hull_matching_index']:
-                        merged_contours = []
-                        [merged_contours.extend(con) for con in contours_sub_Frame]
-                        hull = cv2.convexHull(np.array(merged_contours))
+                    if np.min(temp_matching_score) <= positions['hull_matching_index']:
+                        print("hull found by searching")
+                        hull = temp_hulls[(np.argmin(temp_matching_score))]
+                        positions['hull_matching_index'] = np.min(temp_matching_score)
+                        shape_matching_index_stream.append(np.min(temp_matching_score))
+                    else:
                         positions['hull_matching_index'] = filter_parameters['shape_matching_threshold']
+            if hull is None or positions.get('hull_matching_index') == filter_parameters['shape_matching_threshold']:
+                merged_contours = []
+                [merged_contours.extend(con) for con in contours_sub_Frame]
+                hull = cv2.convexHull(np.array(merged_contours))
+                temp_hull = hull.copy()
 
             # calculate centroid
             centeroid_pt = centroid(hull)
             line_stream.append(centeroid_pt)
             calc_segments([hull], segment_stationary)
+            thumb_gesture_controller.release_points()
+            pinki_gesture_controller.release_points()
+            top_gesture_controller.release_points()
+            thumb_gesture_controller.add(segment_stationary['left'][0], centeroid_pt[0])
+            pinki_gesture_controller.add(centeroid_pt[0], segment_stationary['right'][0])
+            top_gesture_controller.add(segment_stationary['top'][1], segment_stationary['down'][1])
+
             # calculate the new sub frame
-            ratio, area_temp, temp_dims = calc_motion_frame_dimensions(segment_moving, segment_stationary)
+            ratio, area_temp, temp_dims = calc_motion_frame_dimensions(segment_stationary, segment_stationary)
+            if area_temp >= filter_parameters['min_area']:
+                image_dimensions = temp_dims
         elif len(contours) > 0 and gesture_control.get('top'):
             ratio, area_temp, temp_dims = calc_motion_frame_dimensions(segment_moving, segment_moving)
+            if area_temp >= filter_parameters['min_area']:
+                image_dimensions = temp_dims
         else:
-            ratio, area_temp, temp_dims = 1, filter_parameters['min_area'] + 1,[120, 360, 160, 480]
-        if area_temp > filter_parameters['min_area']:
-            image_dimensions = temp_dims
+            shape_matching_index_stream.append(shape_matching_index_stream[-1])
+            if np.abs(np.mean(shape_matching_index_stream) - shape_matching_index_stream[-1]) < 0.0005:
+                image_dimensions = [120, 360, 160, 480]
+
 
         if control_parameters['save_current_image']:
             save_image(sub_frame, name='sub_frame')
@@ -410,50 +470,24 @@ def run(cap = cap):
         # This position values are used to adjust the mouse cursor coordinates.
         # Every iteration the mouse will move 'disp' (for displacement) pixels multiplied by the speed
         positions['proc_time'] = time.time() - positions['proc_time'] + 0.001*video_parameters['wait_time']
-        positions['prev_top_mean'] = positions['top_mean']
-        positions['top_mean'] = tuple(np.mean(np.array(line_stream), axis=0).astype(int))
-        positions['disp'] = np.array(positions['top_mean']) - np.array(positions['prev_top_mean'])
+        if positions.get('top_mean'):
+            positions['prev_top_mean'] = positions['top_mean']
+            positions['top_mean'] = tuple(np.mean(np.array(line_stream), axis=0).astype(int))
+            positions['disp'] = np.array(positions['top_mean']) - np.array(positions['prev_top_mean'])
+        else:
+            positions['top_mean'] = tuple(np.mean(np.array(line_stream), axis=0).astype(int))
+            positions['disp'] = np.array(positions['top_mean']) - np.array((0,0))
         positions['motion_speed'] = np.abs(positions['disp'] / positions['proc_time'])
 
-        # Gesture control, the queues acting as filters to measure the mean distances over time.
-        # So we can dinamically detect whether a significat motion was done if the current is much larger then the mean
-        # since every new value continuously fed into the filter the mean value will adjust itself,
-        # essentialy allowing the gesture to be performed only once over time.
-        thumb_mean_stream.append((np.array(centeroid_pt) - segment_stationary['left'])[0])
-        positions['thumb_mean'] = np.mean(np.array(thumb_mean_stream))
-        pinki_mean_stream.append((segment_stationary['right'] - np.array(centeroid_pt))[0])
-        positions['pinki_mean'] = np.mean(np.array(pinki_mean_stream))
-        top_f_mean_stream.append((np.array(segment_stationary['down']) - segment_stationary['top'])[1])
-        positions['top_f_mean'] = np.mean(np.array(top_f_mean_stream))
-        top_fist_mean_stream.append((np.array(segment_stationary['down']) - segment_stationary['top'])[1])
-        positions['top_fist_mean'] = np.mean(np.array(top_fist_mean_stream))
-
-        diff = np.abs((np.array(segment_stationary['down']) - segment_stationary['top'])[1])
-        if diff > (positions['top_fist_mean'] + positions['top_f_mean'])/2:
-            #top_fist_mean_stream.pop()
-            top_fist_mean_stream[-1] = positions['top_f_mean'] - 30
-            positions['top_fist_mean'] = np.mean(np.array(top_fist_mean_stream))
-        else:
-            top_f_mean_stream[-1] = positions['top_fist_mean'] + 30
-            positions['top_f_mean'] = np.mean(np.array(top_f_mean_stream))
-
-        gesture_control['thumb'] = (np.array(centeroid_pt) - segment_stationary['left'])[0] > 1.5*positions['thumb_mean']
-        gesture_control['pinki'] = (segment_stationary['right'] - np.array(centeroid_pt))[0] > 1.7 * positions['pinki_mean']
-        if np.abs(diff - positions['top_fist_mean']) <= 20:
-            gesture_control['top_fist'] = True
-            gesture_control['top_finger'] = False
-        if np.abs(diff - positions['top_f_mean']) <= 20:
-            gesture_control['top_finger'] = True
-            gesture_control['top_fist'] = False
 
         if control_parameters['control']:
-            if gesture_control.get('top_fist'):
+            if top_gesture_controller.gesture_in:
                 control_by_method(positions, DispOnly=True)
-                if gesture_control['pinki'] and gesture_control['thumb']:
+                if pinki_gesture_controller.gesture_out and thumb_gesture_controller.gesture_out:
                     control_by_method(positions, mb_right=True)
-                elif gesture_control['thumb']:
+                elif thumb_gesture_controller.gesture_out:
                     control_by_method(positions, mb_left=True)
-            if gesture_control['top_finger']:
+            if top_gesture_controller.gesture_out:
                 control_by_method(positions, SquareSpeed=True)
 
         frame_conts = cv2.drawContours(frame.copy(), contours_sub_Frame, -1, (0, 255, 0), 1)
@@ -463,11 +497,17 @@ def run(cap = cap):
             frame_conts = cv2.drawMarker(frame_conts, centeroid_pt,(255,255,255),cv2.MARKER_CROSS, thickness=2 )
             frame_conts = cv2.drawMarker(frame_conts, tuple(segment_stationary['top']), (255, 255, 255), cv2.MARKER_CROSS, thickness=2)
             frame_conts = cv2.drawMarker(frame_conts, positions['top_mean'], (0,0,0), cv2.MARKER_CROSS, thickness=2)
-            frame_conts = cv2.putText(frame_conts, "\n".join(str(gesture_control).split(","))[1:-1], (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), thickness=2)
             if control_parameters['record_video']:
                 save_image(frame_conts,'video',True)
         frame_motion_subframe = draw_motion_frame(frame_conts, image_dimensions)
         cv2.imshow('motion sub frame', frame_motion_subframe)
+
+        color = (255, 255, 255)
+        gesture_status_frame = cv2.putText(np.zeros((400, 300)), str(top_gesture_controller), (20, 20), cv2.FONT_HERSHEY_PLAIN, 1, color)
+        gesture_status_frame = cv2.putText(gesture_status_frame, str(pinki_gesture_controller), (20, 40), cv2.FONT_HERSHEY_PLAIN, 1, color)
+        gesture_status_frame = cv2.putText(gesture_status_frame, str(thumb_gesture_controller), (20, 60), cv2.FONT_HERSHEY_PLAIN, 1, color)
+        gesture_status_frame = cv2.putText(gesture_status_frame, str("hist_matching_Score: " + str(hist_matching_score)), (20, 80), cv2.FONT_HERSHEY_PLAIN, 1, color)
+        cv2.imshow('gesture status', gesture_status_frame)
 
 
 video_parameters['kernel_size_full_frame'] = 3
@@ -512,7 +552,7 @@ scales['wait_time'].config(to= 20,              command = lambda x : set_paramet
 scales['threshold_full_frame'].config(to= 25 , command = lambda x : set_parameter(int(x),'threshold_full_frame',video_parameters,fraction=0.1))
 scales['threshold_focus_frame'].config(to= 25 , command = lambda x : set_parameter(int(x),'threshold_focus_frame',video_parameters,fraction=0.1))
 scales['focus_frame_margin'].config(to= 20,                 command = lambda x : set_parameter(int(x),'focus_frame_margin',video_parameters,fraction=0.2))
-scales['shape_matching_threshold'].config(to= 20 , command = lambda x : set_parameter(int(x),'shape_matching_threshold',filter_parameters,fraction=10))
+scales['shape_matching_threshold'].config(to= 20 , command = lambda x : set_parameter(int(x),'shape_matching_threshold',filter_parameters,fraction=40))
 scales['min_contour_length'].config(to= 25,     command = lambda x : set_parameter(int(x),'min_contour_length',filter_parameters,fraction=0.1))
 scales['control_speed'].config(                         command = lambda x : set_parameter(int(x),'control_speed',control_parameters,fraction=1000))
 
